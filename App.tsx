@@ -12,21 +12,45 @@ import Logo from './components/Logo';
 import { generateCoursePDF } from './components/CertificateGenerator';
 
 const AuthScreen: React.FC = () => {
-  const { login } = useLMS();
+  const { login, signup } = useLMS();
   const [email, setEmail] = useState('admin@entrelms.com');
   const [password, setPassword] = useState('password123');
   const [error, setError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [name, setName] = useState("");
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsAuthenticating(true);
-    const success = await login(email, password);
-    if (!success) {
-      setError('Invalid credentials or access blocked.');
-      setIsAuthenticating(false);
-    }
-  };
+
+  // const handleLogin = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   setIsAuthenticating(true);
+  //   const success = await login(email, password);
+  //   if (!success) {
+  //     setError('Invalid credentials or access blocked.');
+  //     setIsAuthenticating(false);
+  //   }
+  // };
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError("");
+  setIsAuthenticating(true);
+
+  try {
+    const ok =
+      mode === "login"
+        ? await login(email, password)
+        : await signup(name, email, password);
+
+    if (!ok) setError(mode === "login" ? "Invalid credentials or access blocked." : "Signup failed.");
+  } catch (err: any) {
+    console.error(`${mode} crashed:`, err);
+    setError(err?.message ?? `${mode} failed.`);
+  } finally {
+    setIsAuthenticating(false);
+  }
+};
+
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
@@ -48,7 +72,23 @@ const AuthScreen: React.FC = () => {
             <p className="text-slate-400 font-medium">Please sign in with your credentials</p>
           </div>
           
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            
+          {mode === "signup" && (
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">
+              Full Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              required
+              className="w-full bg-slate-50 border-0 rounded-2xl px-6 py-5 focus:ring-2 focus:ring-nitrocrimson-500 outline-none transition-all font-bold text-slate-800"
+              placeholder="Your name"
+            />
+          </div>
+          )}
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">Email Address</label>
               <input 
@@ -81,8 +121,23 @@ const AuthScreen: React.FC = () => {
             )}
             
             <button type="submit" disabled={isAuthenticating} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black hover:bg-nitrocrimson-600 shadow-xl shadow-slate-200 transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-50">
-              Enter Alliance
+              {mode === "login" ? "Enter Alliance" : "Create Account"}
             </button>
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => {
+              setError("");
+              setMode(mode === "login" ? "signup" : "login");
+            }}
+            className="text-xs font-bold text-slate-500 hover:text-nitrocrimson-600"
+          >
+              {mode === "login"
+              ? "New here? Create an account"
+              : "Already have an account? Sign in"}
+            </button>
+          </div>
+
           </form>
           
           <div className="mt-12 pt-10 border-t border-slate-50">

@@ -7,6 +7,7 @@ import { API } from './services/db';
 interface LMSContextType {
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
+  signup: (name: string, email: string, password: string) => Promise<boolean>;
   users: User[];
   courses: Course[];
   progress: Progress[];
@@ -20,7 +21,7 @@ interface LMSContextType {
   
   // Actions
   login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   markLessonComplete: (courseId: string, lessonId: string) => Promise<void>;
   submitWorksheet: (courseId: string, lessonId: string, text: string) => Promise<void>;
   enrollUser: (userId: string, courseId: string, cohortId: string, durationDays: number) => Promise<void>;
@@ -84,16 +85,35 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadData();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const user = await API.login(email, password);
-    if (user) { 
-      setCurrentUser(user); 
-      return true; 
-    }
-    return false;
-  };
 
-  const logout = () => setCurrentUser(null);
+const login = async (email: string, password: string) => {
+  try {
+    await API.login(email, password);        // Supabase auth
+    const profile = await API.getMeProfile(); // profiles table
+
+    setCurrentUser({
+      id: profile.id,
+      name: profile.name,
+      email: profile.email,
+      role: profile.role,
+      status: profile.status,
+      avatar: profile.avatar ?? '',
+      enrolledCourses: []
+    });
+
+    return true;
+  } catch (err) {
+    console.error("Login failed", err);
+    return false;
+  }
+};
+
+
+
+const logout = async () => {
+  await API.logout();
+  setCurrentUser(null);
+};
 
   const markLessonComplete = async (courseId: string, lessonId: string) => {
     if (!currentUser) return;
@@ -118,6 +138,33 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProgress(newProgress);
     setIsSaving(false);
   };
+
+  const signup = async (name: string, email: string, password: string) => {
+  try {
+    const data = await API.signup(name, email, password);
+
+    // If email confirmation is OFF, user is immediately authenticated:
+    // we can fetch profile and set currentUser.
+    const profile = await API.getMeProfile();
+
+    // Map profile -> User type used by app
+    setCurrentUser({
+      id: profile.id,
+      name: profile.name,
+      email: profile.email,
+      role: profile.role,
+      status: profile.status,
+      avatar: profile.avatar ?? "",
+      enrolledCourses: []
+    } as any);
+
+    return true;
+  } catch (err) {
+    console.error("Signup failed", err);
+    return false;
+  }
+};
+
 
   const submitWorksheet = async (courseId: string, lessonId: string, text: string) => {
     if (!currentUser) return;
@@ -152,26 +199,37 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const enrollUser = async (userId: string, courseId: string, cohortId: string, durationDays: number) => {
-    setIsSaving(true);
-    const expiry = new Date(Date.now() + durationDays * 86400000).toISOString();
-    const newEn: Enrollment = { 
-      id: Math.random().toString(36).substr(2, 9), 
-      userId, courseId, cohortId, 
-      enrolledAt: new Date().toISOString(), 
-      expiresAt: expiry 
+  setIsSaving(true);
+  try {
+    const result = await API.addEnrollment(userId, courseId, cohortId, durationDays);
+
+    // update enrollments in state
+    const expiry = result.expiresAt;
+    const newEn: Enrollment = {
+      id: result.id,
+      userId,
+      courseId,
+      cohortId,
+      enrolledAt: new Date().toISOString(),
+      expiresAt: expiry
     };
-    
-    await API.addEnrollment(newEn);
+
     setEnrollments(prev => [...prev, newEn]);
 
-    const updatedUsers = users.map(u => u.id === userId ? { ...u, enrolledCourses: Array.from(new Set([...u.enrolledCourses, courseId])) } : u);
+    // OPTIONAL: You can remove this enrolledCourses logic later since enrollments are source of truth
+    const updatedUsers = users.map(u =>
+      u.id === userId ? { ...u, enrolledCourses: Array.from(new Set([...(u.enrolledCourses ?? []), courseId])) } : u
+    );
     setUsers(updatedUsers);
-    
-    const targetUser = updatedUsers.find(u => u.id === userId);
-    if (targetUser) await API.saveUser(targetUser);
-    
+
+  } catch (err) {
+    console.error("Enroll failed:", err);
+    alert("Enroll failed. Check console.");
+  } finally {
     setIsSaving(false);
-  };
+  }
+};
+
 
   const revokeEnrollment = async (enrollmentId: string) => {
     setIsSaving(true);
@@ -267,13 +325,37 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsSaving(false);
   };
 
-  const addUser = async (userData: Omit<User, 'id'>) => {
-    setIsSaving(true);
-    const newUser: User = { ...userData, id: 'u-' + Date.now(), avatar: `https://picsum.photos/seed/${Date.now()}/200` };
-    await API.saveUser(newUser);
-    setUsers(prev => [...prev, newUser]);
+  // const addUser = async (userData: Omit<User, 'id'>) => {
+  //   setIsSaving(true);
+  //   const newUser: User = { ...userData, id: 'u-' + Date.now(), avatar: `https://picsum.photos/seed/${Date.now()}/200` };
+  //   await API.saveUser(newUser);
+  //   setUsers(prev => [...prev, newUser]);
+  //   setIsSaving(false);
+  // };
+const addUser = async (userData: Omit<User, 'id'>) => {
+  setIsSaving(true);
+  try {
+    // create auth user + profile row via Edge Function
+    await API.createUserAsAdmin({
+      name: userData.name,
+      email: userData.email,
+      password: (userData as any).password,   // your form includes password
+      role: userData.role as any
+    });
+
+    // refresh the users list from DB (so it appears immediately)
+    const u = await API.fetchUsers();
+    setUsers(u);
+
+  } catch (err) {
+    console.error("Create user failed:", err);
+    alert("Create user failed. Check console.");
+  } finally {
     setIsSaving(false);
-  };
+  }
+};
+
+
 
   const deleteUser = async (userId: string) => {
     if (userId === currentUser?.id) return;
@@ -332,7 +414,7 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <LMSContext.Provider value={{
-      currentUser, setCurrentUser, users, courses, progress, submissions, posts, announcements: [], cohorts, enrollments,
+      currentUser, setCurrentUser, users, signup, courses, progress, submissions, posts, announcements: [], cohorts, enrollments,
       isLoading, isSaving,
       login, logout, markLessonComplete, submitWorksheet, enrollUser, revokeEnrollment, addCohort, deleteCohort, addCourse, updateCourse, addLesson, addUser, deleteUser,
       isLessonLocked, isLessonCompleted, isWorksheetSubmitted, isAccessExpired, isCourseCompleted, getDaysRemaining
