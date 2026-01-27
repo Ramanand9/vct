@@ -5,7 +5,29 @@ import { Course, Lesson, Attachment, UserRole } from '../types';
 import { summarizeLesson, getDiscoverySuggestions } from '../services/gemini';
 import { generateCoursePDF } from '../components/CertificateGenerator';
 
-const CoursePlayer: React.FC<{ courseId: string; onBack: () => void }> = ({ courseId, onBack }) => {
+const isDirectVideoFile = (url?: string) => {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return /\.(mp4|webm|ogg)(\?.*)?$/i.test(u.pathname);
+  } catch {
+    // allow local blob: URLs from URL.createObjectURL(file)
+    return /^blob:/.test(url) || /\.(mp4|webm|ogg)(\?.*)?$/i.test(url);
+  }
+};
+
+const getExternalProvider = (url?: string) => {
+  if (!url) return null;
+  const s = url.toLowerCase();
+  if (s.includes('youtube.com') || s.includes('youtu.be')) return 'YouTube';
+  if (s.includes('vimeo.com')) return 'Vimeo';
+  return 'External';
+};
+
+
+const CoursePlayer: React.FC<{ courseId: string; onBack: () => void; initialLessonId?: string | null }> =
+({ courseId, onBack, initialLessonId = null }) => {
+
   const { currentUser, courses, markLessonComplete, submitWorksheet, isLessonLocked, isLessonCompleted, isWorksheetSubmitted, isCourseCompleted, updateCourse } = useLMS();
   
   // Find current course from store to ensure reactivity when updates occur
@@ -32,6 +54,14 @@ const CoursePlayer: React.FC<{ courseId: string; onBack: () => void }> = ({ cour
 
   useEffect(() => {
     if (!course) return;
+      // If admin/architect preview requested a specific lesson, honor it
+  if (initialLessonId) {
+    const exists = course.modules.some(m => m.lessons.some(l => l.id === initialLessonId));
+    if (exists) {
+      setActiveLessonId(initialLessonId);
+      return;
+    }
+  }
     // Find first uncompleted lesson to resume exactly where left off
     let resumeLessonId = null;
     for (const m of course.modules) {
@@ -73,6 +103,13 @@ const CoursePlayer: React.FC<{ courseId: string; onBack: () => void }> = ({ cour
       }
     }
   }, [courseDone, course?.id]);
+
+  useEffect(() => {
+  setIsPlaying(false);
+  setProgress(0);
+  setShowFloatingDone(false);
+}, [activeLessonId]);
+
 
   const handleTimeUpdate = () => {
     if (videoRef.current && course && activeLesson) {
@@ -397,7 +434,78 @@ const CoursePlayer: React.FC<{ courseId: string; onBack: () => void }> = ({ cour
 
           <div className="p-8">
             <h1 className="text-4xl font-black text-slate-900 leading-tight mb-8 tracking-tighter">{activeLesson.title}</h1>
-            <div 
+            <div
+  ref={playerContainerRef}
+  className="bg-black rounded-[2.5rem] overflow-hidden aspect-video shadow-2xl relative group mb-8 select-none border-4 border-slate-900"
+  onContextMenu={(e) => e.preventDefault()}
+>
+  {isDirectVideoFile(activeLesson.videoUrl) ? (
+    <>
+      <video
+        ref={videoRef}
+        key={activeLesson.videoUrl}
+        src={activeLesson.videoUrl}
+        className="w-full h-full object-contain"
+        onTimeUpdate={handleTimeUpdate}
+        onClick={togglePlay}
+        playsInline
+      />
+      {!isPlaying && (
+        <div
+          onClick={togglePlay}
+          className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm cursor-pointer z-20"
+        >
+          <div className="w-24 h-24 bg-nitrocrimson-600 rounded-full flex items-center justify-center text-white text-3xl shadow-2xl animate-pulse">
+            <i className="fas fa-play ml-1"></i>
+          </div>
+        </div>
+      )}
+    </>
+  ) : (
+    <div className="absolute inset-0 flex flex-col items-center justify-center p-10 text-center">
+      <div className="max-w-xl w-full bg-white/5 border border-white/10 rounded-[2rem] p-10 backdrop-blur-md">
+        <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-3">
+          External Video
+        </p>
+        <h3 className="text-2xl font-black text-white mb-3">
+          {getExternalProvider(activeLesson.videoUrl)} Lesson
+        </h3>
+        <p className="text-white/70 text-sm font-medium mb-8 break-all">
+          {activeLesson.videoUrl}
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <a
+            href={activeLesson.videoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-nitrocrimson-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl hover:bg-nitrocrimson-700 transition-all inline-flex items-center justify-center gap-3"
+          >
+            <i className="fas fa-arrow-up-right-from-square"></i>
+            Watch on {getExternalProvider(activeLesson.videoUrl)}
+          </a>
+
+          {!completed && (
+            <button
+              onClick={handleComplete}
+              className="bg-white/10 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest border border-white/10 hover:border-white/30 transition-all inline-flex items-center justify-center gap-3"
+              title="Use this after you've watched the video on the external site."
+            >
+              <i className="fas fa-check"></i>
+              I watched it
+            </button>
+          )}
+        </div>
+
+        <p className="text-white/40 text-[10px] font-bold mt-6">
+          Note: external providers can’t be tracked for watch progress inside VRT.
+        </p>
+      </div>
+    </div>
+  )}
+</div>
+
+            {/* <div 
               ref={playerContainerRef}
               className="bg-black rounded-[2.5rem] overflow-hidden aspect-video shadow-2xl relative group mb-8 select-none border-4 border-slate-900"
               onContextMenu={(e) => e.preventDefault()}
@@ -418,7 +526,7 @@ const CoursePlayer: React.FC<{ courseId: string; onBack: () => void }> = ({ cour
                   </div>
                 </div>
               )}
-            </div>
+            </div> */}
           </div>
         </div>
 

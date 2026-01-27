@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Course, Cohort, Enrollment, User, UserRole } from '../types';
+import { Course, Cohort, Enrollment, User, UserRole, Announcement } from '../types';
 
 // helper: requires logged-in session
 async function requireSession() {
@@ -138,27 +138,51 @@ async signup(name: string, email: string, password: string) {
   },
 
   // ---------- COURSES ----------
-  async fetchCourses(): Promise<Course[]> {
-    await requireSession();
-    const { data, error } = await supabase.from('courses').select('*');
-    if (error) throw error;
 
-    return (data ?? []).map(c => ({
-      ...c,
-      modules: c.modules ?? []
-    })) as Course[];
-  },
+  async fetchCourses(): Promise<Course[]> {
+  await requireSession();
+
+  const { data, error } = await supabase
+    .from('courses')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((c: any) => ({
+    id: c.id,
+    title: c.title,
+    subtitle: c.subtitle,
+    description: c.description,
+    thumbnail: c.thumbnail,
+    category: c.category,
+    level: c.level,
+    visibility: c.visibility,
+    modules: c.modules ?? [],
+    createdAt: c.created_at ?? c.createdAt ?? new Date().toISOString(),
+  })) as Course[];
+},
 
   async saveCourse(course: Course) {
-    if (!(await isAdmin())) throw new Error('Admin only');
-    const { error } = await supabase
-      .from('courses')
-      .upsert({
-        ...course,
-        modules: course.modules
-      });
-    if (error) throw error;
-  },
+  if (!(await isAdmin())) throw new Error('Admin only');
+
+  const payload = {
+    id: course.id,
+    title: course.title,
+    subtitle: course.subtitle,
+    description: course.description,
+    thumbnail: course.thumbnail,
+    category: course.category,
+    level: course.level,
+    visibility: course.visibility,
+    modules: course.modules,
+    created_at: course.createdAt,
+  };
+
+  const { error } = await supabase.from('courses').upsert(payload);
+  if (error) throw error;
+},
+
 
   // ---------- COHORTS ----------
 async fetchCohorts(): Promise<Cohort[]> {
@@ -197,6 +221,59 @@ async fetchCohorts(): Promise<Cohort[]> {
     const { error } = await supabase.from('cohorts').delete().eq('id', cohortId);
     if (error) throw error;
   },
+
+    // ---------- ANNOUNCEMENTS ----------
+  async fetchAnnouncements(): Promise<Announcement[]> {
+    await requireSession();
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data ?? []).map(a => ({
+      id: a.id,
+      title: a.title,
+      body: a.body,
+      courseId: a.course_id ?? undefined,
+      createdAt: a.created_at
+    }));
+  },
+
+  async addAnnouncement(payload: { title: string; body: string; courseId?: string }) {
+    if (!(await isAdmin())) throw new Error('Admin only');
+
+    const session = await requireSession();
+
+    const { data, error } = await supabase
+      .from('announcements')
+      .insert({
+        title: payload.title,
+        body: payload.body,
+        course_id: payload.courseId ?? null,
+        created_by: session.user.id
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      title: data.title,
+      body: data.body,
+      courseId: data.course_id ?? undefined,
+      createdAt: data.created_at
+    } as Announcement;
+  },
+
+  async deleteAnnouncement(id: string) {
+    if (!(await isAdmin())) throw new Error('Admin only');
+    const { error } = await supabase.from('announcements').delete().eq('id', id);
+    if (error) throw error;
+  },
+
 
   // ---------- ENROLLMENTS (GRANT ACCESS) ----------
   async fetchEnrollments(): Promise<Enrollment[]> {

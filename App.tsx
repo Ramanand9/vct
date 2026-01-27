@@ -170,10 +170,176 @@ const LoadingScreen: React.FC = () => (
   </div>
 );
 
+const AnnouncementsPage: React.FC = () => {
+  const { announcements, addAnnouncement, deleteAnnouncement, currentUser, courses, isSaving } = useLMS();
+  const isAdmin = currentUser?.role === UserRole.ADMIN;
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [courseId, setCourseId] = useState<string>("");
+
+  const onCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await addAnnouncement(title.trim(), body.trim(), courseId || undefined);
+    setTitle("");
+    setBody("");
+    setCourseId("");
+    setShowCreate(false);
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto pt-10 space-y-8 animate-fadeIn">
+      <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Growth Alerts</h2>
+          <p className="text-slate-400 font-medium mt-2">Stay updated with the latest from VRT Management.</p>
+        </div>
+
+        {isAdmin && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="bg-nitrocrimson-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-nitrocrimson-700 transition-all shadow-xl"
+          >
+            <i className="fas fa-plus mr-2"></i>
+            Add Update
+          </button>
+        )}
+      </div>
+
+      {announcements.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
+          <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-200 mb-6">
+            <i className="fas fa-bullhorn text-4xl"></i>
+          </div>
+          <h3 className="text-xl font-black text-slate-900">No announcements yet</h3>
+          <p className="text-slate-400 mt-2">Admin can post updates here for everyone to see.</p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {announcements.map(a => {
+            const courseTitle = a.courseId ? (courses.find(c => c.id === a.courseId)?.title ?? "Course") : null;
+            return (
+              <div key={a.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all">
+                <div className="flex items-start justify-between gap-6">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h4 className="text-xl font-black text-slate-900">{a.title}</h4>
+                      {courseTitle && (
+                        <span className="text-[10px] font-black uppercase tracking-widest bg-slate-50 text-slate-500 px-3 py-2 rounded-full border border-slate-100">
+                          {courseTitle}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+                        {new Date(a.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-slate-600 font-medium mt-4 leading-relaxed whitespace-pre-line">
+                      {a.body}
+                    </p>
+                  </div>
+
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        if (confirm("Delete this announcement?")) deleteAnnouncement(a.id);
+                      }}
+                      className="w-12 h-12 bg-white border border-slate-100 text-slate-300 hover:text-red-500 hover:border-red-100 hover:shadow-lg transition-all rounded-2xl flex items-center justify-center flex-shrink-0"
+                      title="Delete"
+                    >
+                      <i className="fas fa-trash"></i>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showCreate && isAdmin && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[80] flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[3rem] p-12 max-w-2xl w-full shadow-2xl animate-scaleIn border border-slate-100">
+            <div className="flex justify-between items-center mb-10">
+              <div>
+                <h3 className="text-3xl font-black text-slate-900 tracking-tighter">Publish Update</h3>
+                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-1">
+                  Visible to all members
+                </p>
+              </div>
+              <button
+                onClick={() => setShowCreate(false)}
+                className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            <form onSubmit={onCreate} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                  Optional: Link to Course
+                </label>
+                <select
+                  value={courseId}
+                  onChange={(e) => setCourseId(e.target.value)}
+                  className="w-full bg-slate-50 border-0 rounded-2xl px-6 py-5 focus:ring-2 focus:ring-nitrocrimson-600 outline-none font-bold text-slate-800"
+                >
+                  <option value="">No course</option>
+                  {courses.map(c => (
+                    <option key={c.id} value={c.id}>{c.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                  Title
+                </label>
+                <input
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full bg-slate-50 border-0 rounded-2xl px-6 py-5 focus:ring-2 focus:ring-nitrocrimson-600 outline-none font-bold text-slate-800"
+                  placeholder="e.g. New cohort starts Monday"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                  Message
+                </label>
+                <textarea
+                  required
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={6}
+                  className="w-full bg-slate-50 border-0 rounded-2xl px-6 py-5 focus:ring-2 focus:ring-nitrocrimson-600 outline-none font-bold text-slate-800"
+                  placeholder="Write the update…"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="w-full py-6 bg-nitrocrimson-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-nitrocrimson-700 transition-all disabled:opacity-50"
+              >
+                {isSaving ? "Publishing..." : "Publish"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 const MainApp: React.FC = () => {
   const { currentUser, courses, isCourseCompleted, isLoading } = useLMS();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
 
   if (isLoading) return <LoadingScreen />;
   if (!currentUser) return <AuthScreen />;
@@ -183,16 +349,25 @@ const MainApp: React.FC = () => {
   const isAdmin = currentUser.role === UserRole.ADMIN;
 
   return (
-    <Layout activeTab={activeTab} setActiveTab={(t) => { setActiveTab(t); setSelectedCourseId(null); }}>
+    <Layout activeTab={activeTab} setActiveTab={(t) => { setActiveTab(t); setSelectedCourseId(null);setSelectedLessonId(null); }}>
       {selectedCourse ? (
         <CoursePlayer 
-          courseId={selectedCourse.id} 
-          onBack={() => setSelectedCourseId(null)} 
+          courseId={selectedCourse.id}
+          initialLessonId={selectedLessonId} 
+          onBack={() => {setSelectedCourseId(null);setSelectedLessonId(null);} }
         />
       ) : (
         <>
           {activeTab === 'dashboard' && <Dashboard onSelectCourse={(c) => setSelectedCourseId(c.id)} />}
-          {activeTab === 'admin' && isAdmin && <AdminPanel />}
+          {activeTab === 'admin' && isAdmin && (
+  <AdminPanel
+    onPreviewLesson={(courseId, lessonId) => {
+      setSelectedCourseId(courseId);
+      setSelectedLessonId(lessonId);
+    }}
+  />
+)}
+
           {activeTab === 'ai-advisor' && !isAdmin && <AIAdvisor />}
           {activeTab === 'community' && <Community />}
           {activeTab === 'worksheets' && (
@@ -205,13 +380,7 @@ const MainApp: React.FC = () => {
             </div>
           )}
           {activeTab === 'announcements' && (
-            <div className="flex flex-col items-center justify-center py-32 bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
-              <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-200 mb-6">
-                <i className="fas fa-bullhorn text-4xl"></i>
-              </div>
-              <h2 className="text-2xl font-black text-slate-900">Growth Alerts</h2>
-              <p className="text-slate-400 mt-2">Stay updated with the latest from VRT Management.</p>
-            </div>
+            <AnnouncementsPage />
           )}
           {activeTab === 'profile' && (
             <div className="max-w-4xl mx-auto pt-10 space-y-8 animate-fadeIn">

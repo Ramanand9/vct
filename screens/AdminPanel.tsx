@@ -3,7 +3,9 @@ import React, { useState, useRef } from 'react';
 import { useLMS } from '../store';
 import { UserRole, Course, Lesson, Cohort, User, Attachment, Module } from '../types';
 
-const AdminPanel: React.FC = () => {
+const AdminPanel: React.FC <{
+  onPreviewLesson: (courseId: string, lessonId: string) => void;
+}> = ({ onPreviewLesson }) => {
   const { 
     users, 
     courses, 
@@ -21,7 +23,8 @@ const AdminPanel: React.FC = () => {
     isSaving 
   } = useLMS();
   
-  
+  const [videoMode, setVideoMode] = useState<'link' | 'file'>('link');
+  const [videoLink, setVideoLink] = useState('');
   const [activeView, setActiveView] = useState<'courses' | 'cohorts' | 'users' | 'status'>('courses');
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   
@@ -81,7 +84,7 @@ const AdminPanel: React.FC = () => {
         thumbnail: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&q=80',
         category: editCourseData.category,
         level: editCourseData.level,
-        visibility: 'private',
+        visibility: 'public',
         modules: [],
         createdAt: new Date().toISOString()
       };
@@ -108,34 +111,65 @@ const AdminPanel: React.FC = () => {
     setShowAddModule(null);
   };
 
-  const handleCreateLesson = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!showAddLesson) return;
-    setUploading(true);
-    
-    let videoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
+const handleCreateLesson = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!showAddLesson) return;
+  setUploading(true);
+
+  // Pick video URL based on mode
+  let videoUrl = '';
+
+  if (videoMode === 'link') {
+    const url = videoLink.trim();
+    if (!url || !isValidHttpUrl(url)) {
+      alert('Please paste a valid YouTube/Vimeo URL (must start with http/https).');
+      setUploading(false);
+      return;
+    }
+    videoUrl = url;
+  } else {
+    // file mode (demo only; blob URLs are not persistent across devices/sessions)
+    videoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
     const file = videoInputRef.current?.files?.[0];
     if (file) videoUrl = URL.createObjectURL(file);
+  }
 
-    const lesson: Lesson = {
-      id: 'l-' + Date.now(),
-      moduleId: showAddLesson.moduleId,
-      title: newLesson.title || 'Untitled Phase',
-      order: 0, // Logic handled in store's addLesson
-      videoUrl,
-      duration: newLesson.duration || '05:00',
-      textNotes: newLesson.textNotes || '',
-      attachments: attachments as Attachment[],
-      videoDownloadable: newLesson.videoDownloadable || false,
-      worksheet: { id: 'ws-' + Date.now(), lessonId: 'l-' + Date.now(), title: 'Phase Deployment Plan', instructions: 'Document your deployment strategy for this module.' }
-    };
+  const lessonId = 'l-' + Date.now();
+  const worksheetId = 'ws-' + Date.now();
 
-    await addLesson(showAddLesson.courseId, showAddLesson.moduleId, lesson);
-    setUploading(false);
-    setShowAddLesson(null);
-    setNewLesson({ title: '', textNotes: '', duration: '05:00', videoDownloadable: false });
-    setAttachments([]);
+  const lesson: Lesson = {
+    id: lessonId,
+    moduleId: showAddLesson.moduleId,
+    title: newLesson.title || 'Untitled Phase',
+    order: (courses.find(c => c.id === showAddLesson.courseId)
+  ?.modules.find(m => m.id === showAddLesson.moduleId)
+  ?.lessons.length ?? 0) + 1, // Logic handled in store's addLesson
+    videoUrl,
+    duration: newLesson.duration || '05:00',
+    textNotes: newLesson.textNotes || '',
+    attachments: attachments as Attachment[],
+    videoDownloadable: newLesson.videoDownloadable || false,
+    worksheet: {
+      id: worksheetId,
+      lessonId,
+      title: 'Phase Deployment Plan',
+      instructions: 'Document your deployment strategy for this module.'
+    }
   };
+
+  await addLesson(showAddLesson.courseId, showAddLesson.moduleId, lesson);
+
+  setUploading(false);
+  setShowAddLesson(null);
+  setNewLesson({ title: '', textNotes: '', duration: '05:00', videoDownloadable: false });
+  setAttachments([]);
+
+  // Reset video inputs
+  setVideoLink('');
+  setVideoMode('link');
+  if (videoInputRef.current) videoInputRef.current.value = '';
+};
+
 
   const handleEnrollUserToCohort = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,6 +205,16 @@ const AdminPanel: React.FC = () => {
     setNewUser({ name: '', email: '', password: '', role: UserRole.STUDENT });
     setShowAddUser(false);
   };
+
+  const isValidHttpUrl = (value: string) => {
+  try {
+    const u = new URL(value);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
 
   return (
     <div className="space-y-10 animate-fadeIn max-w-7xl mx-auto pb-20">
@@ -283,24 +327,34 @@ const AdminPanel: React.FC = () => {
                          </button>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {m.lessons.map(l => (
-                          <div key={l.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-xl transition-all">
-                             <div className="flex items-center gap-4 truncate">
-                                <div className="w-10 h-10 bg-nitrocrimson-50 text-nitrocrimson-600 rounded-xl flex items-center justify-center text-xs">
-                                  <i className="fas fa-play"></i>
-                                </div>
-                                <div className="truncate">
-                                   <p className="text-xs font-black text-slate-900 truncate">{l.title}</p>
-                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{l.duration} Stream</p>
-                                </div>
-                             </div>
-                             <button className="text-slate-200 hover:text-slate-900 transition-colors opacity-0 group-hover:opacity-100">
-                                <i className="fas fa-ellipsis-v"></i>
-                             </button>
-                          </div>
-                        ))}
-                      </div>
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+  {m.lessons.map(l => (
+    <button
+      key={l.id}
+      type="button"
+      onClick={() => onPreviewLesson(editingCourse.id, l.id)}
+      className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-xl transition-all text-left w-full cursor-pointer"
+    >
+      <div className="flex items-center gap-4 truncate">
+        <div className="w-10 h-10 bg-nitrocrimson-50 text-nitrocrimson-600 rounded-xl flex items-center justify-center text-xs">
+          <i className="fas fa-play"></i>
+        </div>
+        <div className="truncate">
+          <p className="text-xs font-black text-slate-900 truncate">{l.title}</p>
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
+            {l.duration} Stream
+          </p>
+        </div>
+      </div>
+
+      {/* keep this as a non-clicking icon for now */}
+      <span className="text-slate-200 group-hover:text-slate-900 transition-colors opacity-0 group-hover:opacity-100">
+        <i className="fas fa-ellipsis-v"></i>
+      </span>
+    </button>
+  ))}
+</div>
+
                     </div>
                   ))
                 )}
@@ -651,7 +705,7 @@ const AdminPanel: React.FC = () => {
                 </div>
               </div>
 
-              <div className="space-y-4">
+              {/* <div className="space-y-4">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Strategic Master Asset (Video Stream)</label>
                 <div className="bg-slate-50 border-4 border-dashed border-slate-200 rounded-[2rem] p-10 text-center cursor-pointer hover:border-nitrocrimson-400 hover:bg-nitrocrimson-50/20 transition-all group shadow-inner">
                   <input ref={videoInputRef} type="file" accept="video/*" className="hidden" id="video-upload-admin" />
@@ -660,7 +714,67 @@ const AdminPanel: React.FC = () => {
                     <p className="font-black text-slate-500 group-hover:text-slate-900 transition-colors uppercase tracking-widest text-[10px]">Deploy Secured Briefing</p>
                   </label>
                 </div>
-              </div>
+              </div> */}
+
+              <div className="space-y-4">
+  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">
+    Strategic Master Asset (Video)
+  </label>
+
+  <div className="flex gap-3">
+    <button
+      type="button"
+      onClick={() => setVideoMode('link')}
+      className={`px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border transition-all ${
+        videoMode === 'link'
+          ? 'bg-nitrocrimson-600 text-white border-nitrocrimson-600'
+          : 'bg-white text-slate-600 border-slate-200 hover:border-nitrocrimson-300'
+      }`}
+    >
+      YouTube/Vimeo Link
+    </button>
+
+    <button
+      type="button"
+      onClick={() => setVideoMode('file')}
+      className={`px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border transition-all ${
+        videoMode === 'file'
+          ? 'bg-slate-900 text-white border-slate-900'
+          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+      }`}
+    >
+      Direct MP4 (File)
+    </button>
+  </div>
+
+  {videoMode === 'link' ? (
+    <div className="bg-slate-50 rounded-[2rem] p-6 border border-slate-100">
+      <label className="block text-[8px] font-black text-slate-300 uppercase tracking-widest mb-2 ml-1">
+        Video URL (YouTube/Vimeo)
+      </label>
+      <input
+        value={videoLink}
+        onChange={(e) => setVideoLink(e.target.value)}
+        placeholder="https://www.youtube.com/watch?v=...  or  https://vimeo.com/..."
+        className="w-full bg-white px-5 py-4 rounded-xl text-xs font-bold border-0 shadow-inner"
+      />
+      <p className="text-[10px] text-slate-400 font-bold mt-3">
+        Tip: This will open externally inside CoursePlayer.
+      </p>
+    </div>
+  ) : (
+    <div className="bg-slate-50 border-4 border-dashed border-slate-200 rounded-[2rem] p-10 text-center cursor-pointer hover:border-nitrocrimson-400 hover:bg-nitrocrimson-50/20 transition-all group shadow-inner">
+      <input ref={videoInputRef} type="file" accept="video/*" className="hidden" id="video-upload-admin" />
+      <label htmlFor="video-upload-admin" className="cursor-pointer">
+        <i className="fas fa-cloud-upload-alt text-4xl text-slate-200 group-hover:text-nitrocrimson-600 mb-3 block transition-colors"></i>
+        <p className="font-black text-slate-500 group-hover:text-slate-900 transition-colors uppercase tracking-widest text-[10px]">
+          Upload MP4 (demo)
+        </p>
+      </label>
+    </div>
+  )}
+</div>
+
 
               <button type="submit" disabled={uploading} className="w-full py-6 bg-slate-900 text-white rounded-[1.8rem] font-black text-lg shadow-2xl hover:bg-nitrocrimson-600 transition-all transform active:scale-95 disabled:opacity-50">
                 {uploading ? <i className="fas fa-circle-notch fa-spin mr-3"></i> : null}
