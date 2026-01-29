@@ -80,7 +80,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
       <main className="flex-1 pb-24 md:pb-8 max-w-7xl mx-auto w-full px-4 md:px-10 pt-10 relative">
         {children}
         {/* Only show AI Support for non-admin users */}
-        {!isAdmin && <AIChatSupport />}
+        { <AIChatSupport />}
       </main>
 
       {/* Mobile Bottom Navigation */}

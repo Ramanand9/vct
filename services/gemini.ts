@@ -1,10 +1,29 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-const getAI = () => {
-  // Always use process.env.API_KEY directly for initializing GoogleGenAI
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getApiKey = () => {
+  // Vite client-side env
+  const viteKey = (import.meta as any).env?.VITE_GEMINI_API_KEY as string | undefined;
+
+  // Optional fallback (if you ever run this server-side)
+  const nodeKey = (typeof process !== "undefined" ? (process as any).env?.API_KEY : undefined) as
+    | string
+    | undefined;
+
+  return viteKey || nodeKey;
 };
+
+const getAI = () => {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error("Missing Gemini API key. Set VITE_GEMINI_API_KEY in .env.local (and restart).");
+  }
+  return new GoogleGenAI({ apiKey });
+};
+
+// ✅ WORKING / stable model to start with
+const CHAT_MODEL = "gemini-1.5-flash";
+
 
 export const summarizeLesson = async (lessonTitle: string, notes: string) => {
   try {

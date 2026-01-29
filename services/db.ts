@@ -292,6 +292,121 @@ async fetchCohorts(): Promise<Cohort[]> {
       expiresAt: e.expires_at
     }));
   },
+  // ---------- WORKSHEETS (LIBRARY) ----------
+async fetchWorksheets() {
+  await requireSession();
+  const { data, error } = await supabase
+    .from('worksheets')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((w: any) => ({
+    id: w.id,
+    title: w.title,
+    body: w.body,
+    url: w.url ?? undefined,
+    createdAt: w.created_at
+  }));
+},
+
+async addWorksheet(payload: { title: string; body: string; url?: string }) {
+  if (!(await isAdmin())) throw new Error('Admin only');
+  const session = await requireSession();
+
+  const id = `ws-${Date.now()}`;
+
+  const { data, error } = await supabase
+    .from('worksheets')
+    .insert({
+      id,
+      title: payload.title,
+      body: payload.body,
+      url: payload.url ?? null,
+      created_by: session.user.id
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    title: data.title,
+    body: data.body,
+    url: data.url ?? undefined,
+    createdAt: data.created_at
+  };
+},
+
+async deleteWorksheet(id: string) {
+  if (!(await isAdmin())) throw new Error('Admin only');
+  const { error } = await supabase.from('worksheets').delete().eq('id', id);
+  if (error) throw error;
+},
+
+// ---------- WORKSHEET REQUESTS ----------
+async fetchWorksheetRequests() {
+  await requireSession();
+  const { data, error } = await supabase
+    .from('worksheet_requests')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    note: r.note,
+    status: r.status,
+    createdAt: r.created_at,
+    createdBy: r.created_by
+  }));
+},
+
+async addWorksheetRequest(note: string) {
+  const session = await requireSession();
+
+  const id = `wr-${Date.now()}`;
+
+  const { data, error } = await supabase
+    .from('worksheet_requests')
+    .insert({
+      id,
+      note,
+      status: 'open',
+      created_by: session.user.id
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    note: data.note,
+    status: data.status,
+    createdAt: data.created_at,
+    createdBy: data.created_by
+  };
+},
+
+async setWorksheetRequestStatus(id: string, status: 'open' | 'fulfilled') {
+  if (!(await isAdmin())) throw new Error('Admin only');
+  const { error } = await supabase
+    .from('worksheet_requests')
+    .update({ status })
+    .eq('id', id);
+  if (error) throw error;
+},
+
+async deleteWorksheetRequest(id: string) {
+  if (!(await isAdmin())) throw new Error('Admin only');
+  const { error } = await supabase.from('worksheet_requests').delete().eq('id', id);
+  if (error) throw error;
+},
+
 
   async addEnrollment(userId: string, courseId: string, cohortId: string, durationDays: number) {
     if (!(await isAdmin())) throw new Error('Admin only');

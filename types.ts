@@ -61,6 +61,20 @@ export interface Lesson {
   worksheet?: Worksheet; // Every lesson can have a worksheet requirement
   videoDownloadable?: boolean; // Control if the video itself can be downloaded
 }
+export interface WorksheetLibraryItem {
+  id: string;
+  title: string;
+  body: string;
+  url?: string;
+  createdAt: string;
+}
+
+export interface WorksheetRequest {
+  id: string;
+  note: string;
+  status: 'open' | 'fulfilled';
+  createdAt: string;
+}
 
 export interface Module {
   id: string;

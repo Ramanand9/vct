@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, Course, Progress, UserRole, Submission, CommunityPost, Announcement, Worksheet, Lesson, Cohort, Enrollment } from './types';
+import { User, Course, Progress, UserRole, Submission, CommunityPost, Announcement, Worksheet, Lesson, Cohort, Enrollment,WorksheetLibraryItem, WorksheetRequest } from './types';
 import { INITIAL_POSTS } from './constants';
 import { API } from './services/db';
 
@@ -35,6 +35,16 @@ interface LMSContextType {
   deleteUser: (userId: string) => Promise<void>;
   addAnnouncement: (title: string, body: string, courseId?: string) => Promise<void>;
   deleteAnnouncement: (id: string) => Promise<void>;
+  worksheets: WorksheetLibraryItem[];
+  worksheetRequests: WorksheetRequest[];
+
+  addWorksheet: (title: string, body: string, url?: string) => Promise<void>;
+  deleteWorksheet: (id: string) => Promise<void>;
+
+  addWorksheetRequest: (note: string) => Promise<void>;
+  setWorksheetRequestStatus: (id: string, status: 'open' | 'fulfilled') => Promise<void>;
+  deleteWorksheetRequest: (id: string) => Promise<void>;
+
 
   // Logic
   isLessonLocked: (courseId: string, lessonId: string) => boolean;
@@ -59,6 +69,9 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [worksheets, setWorksheets] = useState<WorksheetLibraryItem[]>([]);
+  const [worksheetRequests, setWorksheetRequests] = useState<WorksheetRequest[]>([]);
+
 
 
   // Initial Sync from "Cloud"
@@ -66,14 +79,16 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const loadData = async () => {
       setIsLoading(true);
       try {
-        const [u, c, p, s, coh, en,ann] = await Promise.all([
+        const [u, c, p, s, coh, en,ann,ws,wr] = await Promise.all([
           API.fetchUsers(),
           API.fetchCourses(),
           API.fetchProgress(),
           API.fetchSubmissions(),
           API.fetchCohorts(),
           API.fetchEnrollments(),
-          API.fetchAnnouncements()
+          API.fetchAnnouncements(),
+          API.fetchWorksheets(),
+          API.fetchWorksheetRequests()
         ]);
         setUsers(u);
         setCourses(c);
@@ -82,6 +97,8 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCohorts(coh);
         setEnrollments(en);
         setAnnouncements(ann);
+        setWorksheets(ws);
+        setWorksheetRequests(wr);
 
       } catch (err) {
         console.error("Cloud data sync failed", err);
@@ -204,6 +221,57 @@ const logout = async () => {
     setProgress(newProgress);
     setIsSaving(false);
   };
+
+  const addWorksheet = async (title: string, body: string, url?: string) => {
+  setIsSaving(true);
+  try {
+    const created = await API.addWorksheet({ title, body, url });
+    setWorksheets(prev => [created, ...prev]);
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+const deleteWorksheet = async (id: string) => {
+  setIsSaving(true);
+  try {
+    await API.deleteWorksheet(id);
+    setWorksheets(prev => prev.filter(w => w.id !== id));
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+const addWorksheetRequest = async (note: string) => {
+  setIsSaving(true);
+  try {
+    const created = await API.addWorksheetRequest(note);
+    setWorksheetRequests(prev => [created, ...prev]);
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+const setWorksheetRequestStatus = async (id: string, status: 'open' | 'fulfilled') => {
+  setIsSaving(true);
+  try {
+    await API.setWorksheetRequestStatus(id, status);
+    setWorksheetRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+const deleteWorksheetRequest = async (id: string) => {
+  setIsSaving(true);
+  try {
+    await API.deleteWorksheetRequest(id);
+    setWorksheetRequests(prev => prev.filter(r => r.id !== id));
+  } finally {
+    setIsSaving(false);
+  }
+};
+
 
   const enrollUser = async (userId: string, courseId: string, cohortId: string, durationDays: number) => {
   setIsSaving(true);
@@ -443,9 +511,9 @@ const addUser = async (userData: Omit<User, 'id'>) => {
   return (
     <LMSContext.Provider value={{
       currentUser, setCurrentUser, users, signup, courses, progress, submissions, posts, announcements,addAnnouncement,deleteAnnouncement, cohorts, enrollments,
-      isLoading, isSaving,
+      isLoading, isSaving,worksheets, worksheetRequests,
       login, logout, markLessonComplete, submitWorksheet, enrollUser, revokeEnrollment, addCohort, deleteCohort, addCourse, updateCourse, addLesson, addUser, deleteUser,
-      isLessonLocked, isLessonCompleted, isWorksheetSubmitted, isAccessExpired, isCourseCompleted, getDaysRemaining
+      isLessonLocked, isLessonCompleted, isWorksheetSubmitted, isAccessExpired, isCourseCompleted, getDaysRemaining,   addWorksheet, deleteWorksheet, addWorksheetRequest, setWorksheetRequestStatus, deleteWorksheetRequest,
     }}>
       {children}
     </LMSContext.Provider>
