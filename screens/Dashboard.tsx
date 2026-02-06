@@ -12,8 +12,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectCourse }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showActivationPortal, setShowActivationPortal] = useState(false);
   const [selectedCohortId, setSelectedCohortId] = useState('');
+const myCourseIds = new Set(
+  enrollments
+    .filter(e => e.userId === currentUser?.id)
+    .map(e => e.courseId)
+);
 
-  const enrolledCourses = courses.filter(c => currentUser?.enrolledCourses.includes(c.id));
+const enrolledCourses = courses.filter(c => myCourseIds.has(c.id));
+
   const isAdmin = currentUser?.role === UserRole.ADMIN;
   
   const filteredCourses = enrolledCourses.filter(course => 

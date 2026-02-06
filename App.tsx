@@ -495,6 +495,162 @@ const WorksheetsPage: React.FC = () => {
       </div>
 
       {/* Modals omitted for brevity — you already saw them earlier */}
+            {/* ===== MODALS ===== */}
+
+      {/* Request Worksheet Modal */}
+      {showRequest && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4">
+          <div className="w-full max-w-xl bg-white rounded-[2.5rem] p-8 shadow-2xl border border-slate-100">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-2xl font-black text-slate-900">
+                  Request Worksheet
+                </h3>
+                <p className="text-slate-400 font-medium mt-1">
+                  This note is public — everyone can see it.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowRequest(false)}
+                className="text-slate-400 hover:text-slate-700 font-black"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-6">
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Write your request here..."
+                className="w-full min-h-[140px] rounded-2xl border border-slate-200 bg-slate-50 p-4 font-medium text-slate-700 outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRequest(false);
+                  setNote("");
+                }}
+                className="px-6 py-3 rounded-2xl bg-slate-100 text-slate-800 font-black text-xs uppercase tracking-widest"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={async () => {
+                  if (!note.trim()) return alert("Please enter a request note.");
+                  try {
+                    await addWorksheetRequest(note.trim());
+                    setNote("");
+                    setShowRequest(false);
+                  } catch (err) {
+                    console.error(err);
+                    alert("Failed to request worksheet. Check console for details.");
+                  }
+                }}
+                className="px-6 py-3 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-widest disabled:opacity-60"
+              >
+                {isSaving ? "Submitting..." : "Submit Request"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Worksheet Modal (Admin only) */}
+      {showAdd && isAdmin && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4">
+          <div className="w-full max-w-xl bg-white rounded-[2.5rem] p-8 shadow-2xl border border-slate-100">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-2xl font-black text-slate-900">
+                  Add Worksheet
+                </h3>
+                <p className="text-slate-400 font-medium mt-1">
+                  Add a worksheet for students/coaches.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAdd(false)}
+                className="text-slate-400 hover:text-slate-700 font-black"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Title"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-medium text-slate-700 outline-none focus:ring-2 focus:ring-slate-300"
+              />
+
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Body / instructions"
+                className="w-full min-h-[140px] rounded-2xl border border-slate-200 bg-slate-50 p-4 font-medium text-slate-700 outline-none focus:ring-2 focus:ring-slate-300"
+              />
+
+              <input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Optional URL"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-medium text-slate-700 outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAdd(false);
+                  setTitle("");
+                  setBody("");
+                  setUrl("");
+                }}
+                className="px-6 py-3 rounded-2xl bg-slate-100 text-slate-800 font-black text-xs uppercase tracking-widest"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={async () => {
+                  if (!title.trim() || !body.trim()) {
+                    return alert("Title and body are required.");
+                  }
+                  try {
+                    await addWorksheet(title.trim(), body.trim(), url.trim() || undefined);
+                    setTitle("");
+                    setBody("");
+                    setUrl("");
+                    setShowAdd(false);
+                  } catch (err) {
+                    console.error(err);
+                    alert("Failed to add worksheet. Check console for details.");
+                  }
+                }}
+                className="px-6 py-3 rounded-2xl bg-nitrocrimson-600 text-white font-black text-xs uppercase tracking-widest disabled:opacity-60"
+              >
+                {isSaving ? "Saving..." : "Add Worksheet"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

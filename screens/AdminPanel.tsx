@@ -456,7 +456,10 @@ const handleCreateLesson = async (e: React.FormEvent) => {
                     <td className="py-8 px-4">
                        <div className="flex items-center gap-2">
                           <i className="fas fa-shield-alt text-nitrocrimson-500"></i>
-                          <span className="text-xs font-black text-slate-800">{u.enrolledCourses.length}</span>
+                          <span className="text-xs font-black text-slate-800">
+  {new Set(enrollments.filter(e => e.userId === u.id).map(e => e.courseId)).size}
+</span>
+
                        </div>
                     </td>
                     <td className="py-8 px-4 text-right">

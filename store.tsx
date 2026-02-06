@@ -72,44 +72,46 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [worksheets, setWorksheets] = useState<WorksheetLibraryItem[]>([]);
   const [worksheetRequests, setWorksheetRequests] = useState<WorksheetRequest[]>([]);
 
+  const loadData = async () => {
+  setIsLoading(true);
+  try {
+    const [u, c, p, s, coh, en, ann, ws, wr] = await Promise.all([
+      API.fetchUsers(),
+      API.fetchCourses(),
+      API.fetchProgress(),
+      API.fetchSubmissions(),
+      API.fetchCohorts(),
+      API.fetchEnrollments(),
+      API.fetchAnnouncements(),
+      API.fetchWorksheets(),
+      API.fetchWorksheetRequests()
+    ]);
+
+    setUsers(u);
+    setCourses(c);
+    setProgress(p);
+    setSubmissions(s);
+    setCohorts(coh);
+    setEnrollments(en);
+    setAnnouncements(ann);
+    setWorksheets(ws);
+    setWorksheetRequests(wr);
+  } catch (err) {
+    console.error("Cloud data sync failed", err);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
 
   // Initial Sync from "Cloud"
-  useEffect(() => {
-    let cancelled = false;
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        const [u, c, p, s, coh, en,ann,ws,wr] = await Promise.all([
-          API.fetchUsers(),
-          API.fetchCourses(),
-          API.fetchProgress(),
-          API.fetchSubmissions(),
-          API.fetchCohorts(),
-          API.fetchEnrollments(),
-          API.fetchAnnouncements(),
-          API.fetchWorksheets(),
-          API.fetchWorksheetRequests()
-        ]);
-        if (cancelled) return;
-        setUsers(u);
-        setCourses(c);
-        setProgress(p);
-        setSubmissions(s);
-        setCohorts(coh);
-        setEnrollments(en);
-        setAnnouncements(ann);
-        setWorksheets(ws);
-        setWorksheetRequests(wr);
+useEffect(() => {
+  let cancelled = false;
 
-      } catch (err) {
-        console.error("Cloud data sync failed", err);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    };
-    API.getMeProfile()
+  API.getMeProfile()
     .then(profile => {
+      if (cancelled) return;
+
       setCurrentUser({
         id: profile.id,
         name: profile.name,
@@ -119,16 +121,16 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         avatar: profile.avatar ?? '',
         enrolledCourses: []
       });
-    loadData();
-        })
+
+      loadData();
+    })
     .catch(() => {
-      // Not logged in yet -> do nothing. Data will load after login/signup.
       setIsLoading(false);
     });
 
   return () => { cancelled = true; };
-  },
-  []);
+}, []);
+
 
 
 const login = async (email: string, password: string) => {
@@ -145,6 +147,7 @@ const login = async (email: string, password: string) => {
       avatar: profile.avatar ?? '',
       enrolledCourses: []
     });
+    await loadData();
 
     return true;
   } catch (err) {
@@ -202,6 +205,7 @@ const logout = async () => {
       avatar: profile.avatar ?? "",
       enrolledCourses: []
     } as any);
+    await loadData();
 
     return true;
   } catch (err) {
@@ -348,6 +352,7 @@ const deleteWorksheetRequest = async (id: string) => {
       if (!stillHasSameCourse) {
         const updatedUsers = users.map(u => {
           if (u.id !== toRemove.userId) return u;
+          const enrolled = u.enrolledCourses ?? [];
           return { ...u, enrolledCourses: u.enrolledCourses.filter(cid => cid !== toRemove.courseId) };
         });
 
@@ -360,6 +365,7 @@ const deleteWorksheetRequest = async (id: string) => {
 
     setIsSaving(false);
   };
+
 
 
   // const revokeEnrollment = async (id: string) => {
@@ -528,6 +534,17 @@ const addUser = async (userData: Omit<User, 'id'>) => {
     const diff = new Date(enrollment.expiresAt).getTime() - new Date().getTime();
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   };
+  
+  useEffect(() => {
+  if (!currentUser) return;
+
+  const ids = Array.from(
+    new Set(enrollments.filter(e => e.userId === currentUser.id).map(e => e.courseId))
+  );
+
+  setCurrentUser(prev => (prev ? { ...prev, enrolledCourses: ids } : prev));
+}, [enrollments, currentUser?.id]);
+
 
   return (
     <LMSContext.Provider value={{
