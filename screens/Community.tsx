@@ -1,13 +1,33 @@
-
-import React, { useState } from 'react';
-import { useLMS } from '../store';
 import { UserRole } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLMS } from '../store';
+import type { CommunityPost } from '../types';
+import { supabase } from '../services/supabaseClient';
+
 
 const Community: React.FC = () => {
   const { users, currentUser, posts } = useLMS();
   const [activeTab, setActiveTab] = useState<'feed' | 'messages' | 'members'>('feed');
   const [isSection1Open, setIsSection1Open] = useState(true);
   const [isSection2Open, setIsSection2Open] = useState(true);
+  const [feedPosts, setFeedPosts] = useState<CommunityPost[]>([]);
+const [newTitle, setNewTitle] = useState('');
+const [newBody, setNewBody] = useState('');
+const [newType, setNewType] = useState<'win' | 'question' | 'resource' | 'help'>('win');
+const [posting, setPosting] = useState(false);
+const loadFeed = async () => {
+  const { data, error } = await supabase
+    .from('community_posts')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (!error && data) {
+    setFeedPosts(data);
+  }
+};
+
+
 
   return (
     <div className="space-y-12 animate-fadeIn pb-20">

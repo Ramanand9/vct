@@ -76,6 +76,7 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Initial Sync from "Cloud"
   useEffect(() => {
+    let cancelled = false;
     const loadData = async () => {
       setIsLoading(true);
       try {
@@ -90,6 +91,7 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           API.fetchWorksheets(),
           API.fetchWorksheetRequests()
         ]);
+        if (cancelled) return;
         setUsers(u);
         setCourses(c);
         setProgress(p);
@@ -103,11 +105,30 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (err) {
         console.error("Cloud data sync failed", err);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
+    API.getMeProfile()
+    .then(profile => {
+      setCurrentUser({
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        role: profile.role,
+        status: profile.status,
+        avatar: profile.avatar ?? '',
+        enrolledCourses: []
+      });
     loadData();
-  }, []);
+        })
+    .catch(() => {
+      // Not logged in yet -> do nothing. Data will load after login/signup.
+      setIsLoading(false);
+    });
+
+  return () => { cancelled = true; };
+  },
+  []);
 
 
 const login = async (email: string, password: string) => {
