@@ -64,6 +64,145 @@ async signup(name: string, email: string, password: string) {
   // data.user may be null until email confirmed depending on settings
   return data;
 },
+  
+// ---------- CHAT: COMMUNITY (PUBLIC) ----------
+async fetchCommunityMessages(limit = 200) {
+  await requireSession();
+  const { data, error } = await supabase
+    .from("community_messages")
+    .select("*")
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+
+  return (data ?? []).map((m: any) => ({
+    id: m.id,
+    userId: m.user_id,
+    userName: m.user_name,
+    text: m.text,
+    createdAt: m.created_at,
+  }));
+},
+
+async addCommunityMessage(text: string) {
+  const session = await requireSession();
+  const me = await this.getMeProfile();
+
+  const { data, error } = await supabase
+    .from("community_messages")
+    .insert({
+      user_id: session.user.id,
+      user_name: me.name ?? me.email ?? "User",
+      text,
+    })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    userName: data.user_name,
+    text: data.text,
+    createdAt: data.created_at,
+  };
+},
+
+// ---------- CHAT: PRIVATE (ADMIN THREADS + MESSAGES) ----------
+async getOrCreateAdminThreadForMe() {
+  const session = await requireSession();
+
+  const existing = await supabase
+    .from("admin_threads")
+    .select("*")
+    .eq("user_id", session.user.id)
+    .single();
+
+  if (!existing.error && existing.data) {
+    return {
+      id: existing.data.id,
+      userId: existing.data.user_id,
+      createdAt: existing.data.created_at,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("admin_threads")
+    .insert({ user_id: session.user.id })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+
+  return { id: data.id, userId: data.user_id, createdAt: data.created_at };
+},
+
+async fetchAdminThreads() {
+  if (!(await isAdmin())) throw new Error("Admin only");
+
+  const { data, error } = await supabase
+    .from("admin_threads")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((t: any) => ({
+    id: t.id,
+    userId: t.user_id,
+    createdAt: t.created_at,
+  }));
+},
+
+async fetchAdminMessages(threadId: string, limit = 300) {
+  await requireSession();
+  const { data, error } = await supabase
+    .from("admin_messages")
+    .select("*")
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+
+  return (data ?? []).map((m: any) => ({
+    id: m.id,
+    threadId: m.thread_id,
+    senderId: m.sender_id,
+    senderName: m.sender_name,
+    text: m.text,
+    createdAt: m.created_at,
+  }));
+},
+
+async addAdminMessage(threadId: string, text: string) {
+  const session = await requireSession();
+  const me = await this.getMeProfile();
+
+  const { data, error } = await supabase
+    .from("admin_messages")
+    .insert({
+      thread_id: threadId,
+      sender_id: session.user.id,
+      sender_name: me.name ?? me.email ?? "User",
+      text,
+    })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    threadId: data.thread_id,
+    senderId: data.sender_id,
+    senderName: data.sender_name,
+    text: data.text,
+    createdAt: data.created_at,
+  };
+},
+
 
 
   async logout() {
@@ -182,6 +321,20 @@ async signup(name: string, email: string, password: string) {
   const { error } = await supabase.from('courses').upsert(payload);
   if (error) throw error;
 },
+
+async deleteCourse(courseId: string) {
+  if (!(await isAdmin())) throw new Error("Admin only");
+
+  // Clean up dependent data first (prevents FK issues + keeps DB consistent)
+  await supabase.from("enrollments").delete().eq("course_id", courseId);
+  await supabase.from("progress").delete().eq("course_id", courseId);
+  await supabase.from("cohorts").delete().eq("course_id", courseId);
+
+  // Delete the course itself
+  const { error } = await supabase.from("courses").delete().eq("id", courseId);
+  if (error) throw error;
+},
+
 
 
   // ---------- COHORTS ----------
@@ -489,6 +642,7 @@ async deleteUser(userId: string) {
   const { error } = await supabase.from("profiles").delete().eq("id", userId);
   if (error) throw error;
 },
+
 
 
 };

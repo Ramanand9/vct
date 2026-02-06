@@ -30,6 +30,8 @@ interface LMSContextType {
   deleteCohort: (cohortId: string) => Promise<void>;
   addCourse: (course: Course) => Promise<void>;
   updateCourse: (courseId: string, updates: Partial<Course>) => Promise<void>;
+  deleteCourse: (courseId: string) => Promise<void>;
+
   addLesson: (courseId: string, moduleId: string, lesson: Lesson) => Promise<void>;
   addUser: (user: Omit<User, 'id'>) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
@@ -428,6 +430,24 @@ const deleteAnnouncement = async (id: string) => {
     setIsSaving(false);
   };
 
+  const deleteCourse = async (courseId: string) => {
+  setIsSaving(true);
+  try {
+    await API.deleteCourse(courseId);
+
+    // remove from local state
+    setCourses(prev => prev.filter(c => c.id !== courseId));
+
+    // also remove any cohorts/enrollments that referenced it (UI consistency)
+    setCohorts(prev => prev.filter(co => co.courseId !== courseId));
+    setEnrollments(prev => prev.filter(en => en.courseId !== courseId));
+    setProgress(prev => prev.filter(p => p.courseId !== courseId));
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+
   const addLesson = async (courseId: string, moduleId: string, lesson: Lesson) => {
     setIsSaving(true);
     const course = courses.find(c => c.id === courseId);
@@ -550,7 +570,7 @@ const addUser = async (userData: Omit<User, 'id'>) => {
     <LMSContext.Provider value={{
       currentUser, setCurrentUser, users, signup, courses, progress, submissions, posts, announcements,addAnnouncement,deleteAnnouncement, cohorts, enrollments,
       isLoading, isSaving,worksheets, worksheetRequests,
-      login, logout, markLessonComplete, submitWorksheet, enrollUser, revokeEnrollment, addCohort, deleteCohort, addCourse, updateCourse, addLesson, addUser, deleteUser,
+      login, logout, markLessonComplete, submitWorksheet, enrollUser, revokeEnrollment, addCohort, deleteCohort, addCourse, updateCourse,deleteCourse, addLesson, addUser, deleteUser,
       isLessonLocked, isLessonCompleted, isWorksheetSubmitted, isAccessExpired, isCourseCompleted, getDaysRemaining,   addWorksheet, deleteWorksheet, addWorksheetRequest, setWorksheetRequestStatus, deleteWorksheetRequest,
     }}>
       {children}

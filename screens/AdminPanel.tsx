@@ -11,6 +11,7 @@ const AdminPanel: React.FC <{
     courses, 
     addCourse,
     updateCourse, 
+    deleteCourse,
     enrollUser, 
     revokeEnrollment, 
     addLesson, 
@@ -282,6 +283,26 @@ const handleCreateLesson = async (e: React.FormEvent) => {
                           <button onClick={() => setEditingCourse(course)} className="px-6 h-12 bg-nitrocrimson-50 text-nitrocrimson-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-nitrocrimson-600 hover:text-white transition-all shadow-sm border border-nitrocrimson-100 flex items-center gap-2">
                             Architect <i className="fas fa-sitemap"></i>
                           </button>
+                          <button
+  onClick={async () => {
+    const ok = confirm(
+      `Delete "${course.title}"?\n\nThis will remove:\n- the course\n- cohorts under it\n- enrollments\n- progress\n\nThis cannot be undone.`
+    );
+    if (!ok) return;
+
+    try {
+      await deleteCourse(course.id);
+    } catch (e) {
+      console.error(e);
+      alert("Delete failed. Check console.");
+    }
+  }}
+  className="w-12 h-12 bg-white text-slate-400 rounded-2xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all shadow-sm border border-slate-100"
+  title="Delete course"
+>
+  <i className="fas fa-trash"></i>
+</button>
+
                         </div>
                       </div>
                       <p className="text-sm text-slate-500 line-clamp-2 mb-6 font-medium leading-relaxed">{course.description}</p>
@@ -984,6 +1005,7 @@ const handleCreateLesson = async (e: React.FormEvent) => {
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #EA0027; }
       `}</style>
+      
     </div>
   );
 };
